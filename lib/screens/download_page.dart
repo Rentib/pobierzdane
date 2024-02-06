@@ -10,7 +10,7 @@ import 'package:pobierzdane/utils/api.dart';
 class DownloadPage extends StatefulWidget {
   final Api api;
 
-  const DownloadPage({Key? key, required this.api}) : super(key: key);
+  const DownloadPage({super.key, required this.api});
 
   @override
   _DownloadPageState createState() => _DownloadPageState();
@@ -139,14 +139,16 @@ class _DownloadPageState extends State<DownloadPage> {
                   throw Exception('Nieobsługiwany system operacyjny');
                 }
 
-                String? path = await FilesystemPicker.openDialog(
-                  title: 'Zapisz',
-                  context: context,
-                  rootDirectory: Directory(home),
-                  fsType: FilesystemType.folder,
-                  pickText: 'Wybierz',
-                  folderIconColor: Colors.teal,
-                );
+                // String? path = await FilesystemPicker.openDialog(
+                //   title: 'Zapisz',
+                //   context: context,
+                //   rootDirectory: Directory(home),
+                //   fsType: FilesystemType.folder,
+                //   pickText: 'Wybierz',
+                //   folderIconColor: Colors.teal,
+                // );
+
+                String path = "$home/Downloads";
 
                 File file = File('$path/$filename');
                 await file.writeAsBytes(bytes);

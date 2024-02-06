@@ -7,7 +7,7 @@ void main() {
 }
 
 class PobierzDane extends StatelessWidget {
-  const PobierzDane({Key? key}) : super(key: key);
+  const PobierzDane({super.key});
 
   @override
   Widget build(BuildContext context) {

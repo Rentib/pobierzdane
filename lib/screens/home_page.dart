@@ -4,7 +4,7 @@ import 'package:pobierzdane/screens/download_page.dart';
 import 'package:pobierzdane/utils/api.dart';
 
 class HomePage extends StatelessWidget {
-  const HomePage({Key? key}) : super(key: key);
+  const HomePage({super.key});
 
   static const String routeName = '/';
 
