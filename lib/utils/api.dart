@@ -41,6 +41,21 @@ abstract class Api {
         _sort = sort,
         _type = types.first;
 
+  String _responsesToCSV(List<String> responses) {
+    String csv = responses.first;
+    for (int i = 1; i < responses.length; ++i) {
+      csv += responses[i].split('\n').skip(2).join('\n');
+    }
+
+    var rows = const CsvToListConverter(
+      fieldDelimiter: ',',
+      shouldParseNumbers: false,
+    ).convert(csv);
+    return const ListToCsvConverter(
+      fieldDelimiter: ';',
+    ).convert(rows);
+  }
+
   Future<String> get({
     required BuildContext context,
     required int startYear,
@@ -103,6 +118,7 @@ abstract class Api {
           if (response.statusCode == 200) {
             low = mid + 1;
           } else {
+            // no more data
             high = mid;
           }
         }
@@ -194,18 +210,7 @@ abstract class Api {
       throw Exception('Brak danych w wybranym zakresie');
     }
 
-    String csv = responses.first;
-    for (int i = 1; i < responses.length; ++i) {
-      csv += responses[i].split('\n').skip(2).join('\n');
-    }
-
-    var rows = const CsvToListConverter(
-        fieldDelimiter: ',',
-        shouldParseNumbers: false,
-    ).convert(csv);
-    return const ListToCsvConverter(
-        fieldDelimiter: ';',
-    ).convert(rows);
+    return _responsesToCSV(responses);
   }
 }
 
@@ -254,8 +259,19 @@ class Slownik extends Api {
             'rozdzialy',
             'zrodla-finansowania'
           ],
-          sort: 'czesc,aktywny_od,aktywny_do',
+          sort: 'aktywny_od,aktywny_do',
         );
+
+  final Map<String, String> _sortParam = {
+    'czesci': 'czesc',
+    'dysponenci': 'id_dysp',
+    'dzialy': 'dzial',
+    'grupy-ekonomiczne': 'nr_grupy',
+    'jednostki-budzetowe': 'id_jb',
+    'paragrafy': 'paragraf',
+    'rozdzialy': 'rozdzial',
+    'zrodla-finansowania': 'nr_zrodla',
+  };
 
   @override
   Future<String> get({
@@ -263,19 +279,19 @@ class Slownik extends Api {
     required int startYear,
     required int endYear,
   }) async {
+    List<String> responses = [];
     var client = http.Client();
 
-    List<String> responses = [];
-
-    // TODO: make the same as in other get method
     try {
       for (int page = 1;; ++page) {
+        String sort =
+            "${_sortParam[type]},${type == 'jednostki-budzetowe' ? 'aktywna_od,aktywna_do' : _sort}";
         var response = await client.get(
           Uri.https(Api._baseUrl, _apiPath + type, {
             'format': Api._format,
-            'limit': '500', // stupid trezor API doesn't allow more than 500
+            'limit': Api._limit.toString(),
             'page': page.toString(),
-            'sort': 'czesc,aktywny_od,aktywny_do',
+            'sort': sort,
           }),
         );
 
@@ -283,8 +299,16 @@ class Slownik extends Api {
           await Future.delayed(const Duration(seconds: 5));
           --page;
           continue;
+        } else if (response.statusCode == 204) {
+          break; // no more data
+        } else if (response.statusCode == 400) {
+          throw Exception('Błąd 400: Nieprawidłowe parametry zapytania');
+        } else if (response.statusCode == 404) {
+          throw Exception('Błąd 404: Brak komunikacji z serwerem');
+        } else if (response.statusCode == 500) {
+          throw Exception('Błąd 500: Wewnętrzny błąd serwera');
         } else if (response.statusCode != 200) {
-          break;
+          break; // no more data
         }
 
         responses.add(response.body);
@@ -297,17 +321,6 @@ class Slownik extends Api {
       throw Exception('Brak danych w wybranym zakresie');
     }
 
-    String csv = responses.first;
-    for (int i = 1; i < responses.length; ++i) {
-      csv += responses[i].split('\n').skip(2).join('\n');
-    }
-
-    var rows = const CsvToListConverter(
-        fieldDelimiter: ',',
-        shouldParseNumbers: false,
-    ).convert(csv);
-    return const ListToCsvConverter(
-        fieldDelimiter: ';',
-    ).convert(rows);
+    return _responsesToCSV(responses);
   }
 }
