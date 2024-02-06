@@ -208,6 +208,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.8"
+  serial_csv:
+    dependency: "direct main"
+    description:
+      name: serial_csv
+      sha256: "394c366dcca7316fec5f5cc098c17b9ab6be93e5dd65cf160b4b4061a2e6a658"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.4.0"
   sky_engine:
     dependency: transitive
     description: flutter
