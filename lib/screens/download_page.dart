@@ -13,7 +13,7 @@ class DownloadPage extends StatefulWidget {
   const DownloadPage({super.key, required this.api});
 
   @override
-  _DownloadPageState createState() => _DownloadPageState();
+  createState() => _DownloadPageState();
 }
 
 class _DownloadPageState extends State<DownloadPage> {
