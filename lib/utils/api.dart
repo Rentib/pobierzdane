@@ -30,6 +30,8 @@ abstract class Api {
       500; // stupid trezor api doesn't allow more than 500 records per request
   static const String _format = 'csv';
 
+  bool _interrupted = false; // flag to interrupt downloading
+
   Api({
     required String apiPath,
     required String name,
@@ -56,6 +58,50 @@ abstract class Api {
     ).convert(rows);
   }
 
+  Future<int> _getPagesCount(int year) async {
+    var client = http.Client();
+    int low = 1, high = 1000000;
+    try {
+      while (low < high) {
+        if (_interrupted) {
+          throw Exception('Przerwano pobieranie danych');
+        }
+
+        int mid = low + ((high - low) >> 1);
+        var response = await client.get(
+          Uri.https(_baseUrl, _apiPath + _type, {
+            'rok': year.toString(),
+            'format': _format,
+            'limit': _limit.toString(),
+            'page': mid.toString(),
+            'sort': _sort,
+          }),
+        );
+
+        if (response.statusCode == 429) {
+          await Future.delayed(const Duration(seconds: 5));
+          continue;
+        } else if (response.statusCode == 400) {
+          throw Exception('Błąd 400: Nieprawidłowe parametry zapytania');
+        } else if (response.statusCode == 404) {
+          throw Exception('Błąd 404: Brak komunikacji z serwerem');
+        } else if (response.statusCode == 500) {
+          throw Exception('Błąd 500: Wewnętrzny błąd serwera');
+        }
+
+        if (response.statusCode == 200) {
+          low = mid + 1;
+        } else {
+          // no more data
+          high = mid;
+        }
+      }
+    } finally {
+      client.close();
+    }
+    return low - 1;
+  }
+
   Future<String> get({
     required BuildContext context,
     required int startYear,
@@ -69,78 +115,43 @@ abstract class Api {
       throw ArgumentError('startYear must be <= endYear');
     }
     ProgressDialog pd = ProgressDialog(context: context);
-    var interrupted = false;
-
-    pd.show(
-      max: 1,
-      msg: 'Przygotowywanie danych...',
-      cancel: Cancel(
-        cancelClicked: () {
-          interrupted = true;
-        },
-      ),
-    );
+    _interrupted = false;
 
     int totalPages = 0;
     Map<int, int> pagesInYear = {};
-    var client = http.Client();
 
-    // TODO: move to separate function
     try {
+      pd.show(
+        max: 1,
+        msg: 'Przygotowywanie danych...',
+        cancel: Cancel(
+          cancelClicked: () {
+            _interrupted = true;
+          },
+        ),
+      );
+
       for (int year = startYear; year <= endYear; ++year) {
-        int low = 1, high = 1000000;
-        while (low < high) {
-          if (interrupted) {
-            throw Exception('Przerwano pobieranie danych');
-          }
-          int mid = low + ((high - low) >> 1);
-          var response = await client.get(
-            Uri.https(_baseUrl, _apiPath + _type, {
-              'rok': year.toString(),
-              'format': _format,
-              'limit': _limit.toString(),
-              'page': mid.toString(),
-              'sort': _sort,
-            }),
-          );
-
-          if (response.statusCode == 429) {
-            await Future.delayed(const Duration(seconds: 5));
-            continue;
-          } else if (response.statusCode == 400) {
-            throw Exception('Błąd 400: Nieprawidłowe parametry zapytania');
-          } else if (response.statusCode == 404) {
-            throw Exception('Błąd 404: Brak komunikacji z serwerem');
-          } else if (response.statusCode == 500) {
-            throw Exception('Błąd 500: Wewnętrzny błąd serwera');
-          }
-
-          if (response.statusCode == 200) {
-            low = mid + 1;
-          } else {
-            // no more data
-            high = mid;
-          }
-        }
-        totalPages += low - 1;
-        pagesInYear[year] = low - 1;
+        pagesInYear[year] = await _getPagesCount(year);
+        totalPages += pagesInYear[year]!;
       }
     } finally {
       pd.close();
-      client.close();
     }
 
     if (totalPages == 0) {
       throw Exception('Brak danych w wybranym zakresie');
     }
 
-    client = http.Client();
+    var client = http.Client();
+    List<String> responses = [];
+
     pd.show(
       max: totalPages,
       msg: 'Pobieranie danych...',
       cancel: Cancel(
         cancelClicked: () {
-          interrupted = true;
+          _interrupted = true;
         },
       ),
       completed: Completed(
@@ -149,12 +160,11 @@ abstract class Api {
       progressType: ProgressType.valuable,
     );
 
-    List<String> responses = [];
     try {
       int downloadedPages = 0;
       for (int year = startYear; year <= endYear; ++year) {
         for (int page = 1; page <= pagesInYear[year]!; ++page) {
-          if (interrupted) {
+          if (_interrupted) {
             throw Exception('Przerwano pobieranie danych');
           }
           var response = await client.get(
@@ -190,7 +200,7 @@ abstract class Api {
               msg: 'Pobieranie danych...',
               cancel: Cancel(
                 cancelClicked: () {
-                  interrupted = true;
+                  _interrupted = true;
                 },
               ),
               completed: Completed(
@@ -201,8 +211,10 @@ abstract class Api {
           }
         }
       }
-    } finally {
+    } catch (e) {
       pd.close();
+      rethrow;
+    } finally {
       client.close();
     }
 
